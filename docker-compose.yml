@@ -39,8 +39,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      deploy:
+        resources:
+          limits:
+          cpus: '0.5'
+          memory: '512M'
+        reservations:
+          cpus: '0.25'
+          memory: '256M'
+
     networks:
       - raktimdas
+
   kafka_broker:
     image: docker.redpanda.com/redpandadata/redpanda:v24.1.1
     restart: unless-stopped
@@ -61,8 +71,17 @@ services:
       - 18082:18082
       - 19092:19092
       - 19644:9644
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: '1G'
+        reservations:
+          cpus: '0.5'
+          memory: '512'
     networks:
       - raktimdas
+
   console:
     image: docker.redpanda.com/redpandadata/console:v2.5.2
     restart: unless-stopped
@@ -90,6 +109,16 @@ services:
           clusters:
             - name: local-connect-clusters
             url: http://connect:8083
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '512M'
+        reservations:
+          cpus: '0.25'
+          memory: '256'
+
     networks:
       - raktimdas
 
@@ -108,6 +137,15 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '512M'
+        reservations:
+          cpus: '0.25'
+          memory: '256'
+
     networks:
       - raktimdas
 
@@ -124,6 +162,14 @@ services:
       retries: 5
       start_period: 30s
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: '1G'
+        reservations:
+          cpus: '0.5'
+          memory: '512M'
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -142,6 +188,14 @@ services:
       retries: 5
       start_period: 30s
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: '1G'
+        reservations:
+          cpus: '0.5'
+          memory: '512M'
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
@@ -243,9 +297,60 @@ services:
     networks:
       - raktimdas
 
+  pinot-controller:
+    image: apachepinot/pinot:1.2.0
+    command: "StartController -zKAddress zookeeper:2181"
+    restart: unless-stopped
+    container_name: "pinot-controller"
+    ports:
+      - "9000:9000"
+    environment:
+      JAVA_OPTS: "-Dplugins.dir=/opt/pinot/plugins -Xms1G -Xmx1G -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+    depends_on:
+      - zookeeper
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: '1G'
+        reservations:
+          cpus: '0.5'
+          memory: '512M'
+
+    networks:
+      - raktimdas
+
+  pinot-broker:
+    image: apachepinot/pinot:1.2.0
+    command: "StartBroker -zKAddress zookeeper:2181"
+    restart: unless-stopped
+    container_name: "pinot-broker"
+    ports:
+      - "8097:8097"
+    environment:
+      JAVA_OPTS: "-Dplugins.dir=/opt/pinot/plugins -Xms1G -Xmx1G -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+    depends_on:
+      - pinot-controller
+    networks:
+      - raktimdas
+
+  pinot-server:
+    image: apachepinot/pinot:1.2.0
+    command: "startServer -zkAddress zookeeper:2181"
+    restart: unless-stopped
+    container_name: "pinot-server"
+    ports:
+      - "8098:8098"
+    environment:
+      JAVA_OPTS: "-Dplugins.dir=/opt/pinot/plugins -Xms1G -Xmx1G -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+    depends_on:
+      - pinot-broker
+    networks:
+      - raktimdas
+
 networks:
   raktimdas:
-
+    driver: bridge
 
 volumes:
   postgres-db-volume:
